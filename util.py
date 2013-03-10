@@ -60,10 +60,22 @@ def get_network_devices(dom):
     return devices
 
 
-
+# TODO Essa funcao retorna um valor de CPU diferente do vm.info().
 def cpu_stats(vm):
     """ Returns the accumulated CPU time used in nanoseconds."""
-    return vm.info()[4]
+    info_cpus = vm.vcpus()[0]
+    time = 0
+    # info_cpus is a list with info for each VCPU in the VM, so we have
+    # to iterate through all of them and sum the time.
+    for info in info_cpus:
+        time += info[2]
+
+    return time
+
+
+# TODO nao funciona
+def memory_stats(vm):
+    return vm.memoryStats()
 
 
 
@@ -74,6 +86,7 @@ def main():
 
     print network_stats(vm_dict['ubuntu2'])
     print cpu_stats(vm_dict['ubuntu2'])
+    print memory_stats(vm_dict['ubuntu2'])
 
 
 if __name__ == "__main__":
