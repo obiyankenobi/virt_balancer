@@ -1,7 +1,7 @@
 import libvirt
 from xml.etree import ElementTree as ET
 
-def get_vms():
+def get_all_vms():
     """Returns a dict with all VMs in the machine, using
     the VM name as key.
     """
@@ -17,6 +17,26 @@ def get_vms():
         vm = conn.lookupByName(vmName)
         result[vmName] = vm
     return result
+
+
+
+def get_vms():
+    """Returns a dict with active VMs in the machine, using
+    the VM name as key.
+    """
+    conn = libvirt.open(None)
+    result = {}
+    vmList = conn.listDomainsID()
+    for id in vmList:
+        vm = conn.lookupByID(id)
+        vmName = vm.name()
+        result[vmName] = vm
+    vmList = conn.listDefinedDomains()
+    for vmName in vmList:
+        vm = conn.lookupByName(vmName)
+        result[vmName] = vm
+    return result
+
 
 
 def list_info(vm_dict):
