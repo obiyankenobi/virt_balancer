@@ -69,11 +69,12 @@ def cpu_stats(vm):
 
 def main():
     """Main for testing purposes"""
+    machine_name = 'ubuntu1'
     vm_dict = get_vms()
     list_info(vm_dict)
 
-    print network_stats(vm_dict['ubuntu2'])
-    print cpu_stats(vm_dict['ubuntu2'])
+    print network_stats(vm_dict[machine_name])
+    print cpu_stats(vm_dict[machine_name])
 
 
 if __name__ == "__main__":
