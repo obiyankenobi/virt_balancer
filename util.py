@@ -1,6 +1,7 @@
 import libvirt
 from xml.etree import ElementTree as ET
 
+
 def get_vms():
     """Returns a dict with all VMs in the machine, using
     the VM name as key.
@@ -25,7 +26,6 @@ def list_info(vm_dict):
         print "{0}: state:{1} \t maxMemory:{2} \t memory:{3} \t virCPU:{4} \t cpuTime:{5}ns ".format(vm.name(), info[0], info[1]/1024, info[2]/1024, info[3], info[4])
 
 
-
 def network_stats(vm):
     """ Returns the accumulated network usage for the domain
     as an array with the following fields:
@@ -37,7 +37,6 @@ def network_stats(vm):
         stats = [(x + y) for x, y in zip(stats, vm.interfaceStats(dev))]
 
     return stats
-
 
 
 def get_network_devices(dom):
@@ -60,11 +59,13 @@ def get_network_devices(dom):
     return devices
 
 
-
 def cpu_stats(vm):
     """ Returns the accumulated CPU time used in nanoseconds."""
     return vm.info()[4]
 
+
+def get_mem_sts(vm):
+    print "MEM STS: {0}".format(vm.memoryStats())
 
 
 def main():
@@ -75,7 +76,7 @@ def main():
 
     print network_stats(vm_dict[machine_name])
     print cpu_stats(vm_dict[machine_name])
-
+    get_mem_sts(vm_dict[machine_name])
 
 if __name__ == "__main__":
     main()
