@@ -31,10 +31,6 @@ def get_vms():
         vm = conn.lookupByID(id)
         vmName = vm.name()
         result[vmName] = vm
-    vmList = conn.listDefinedDomains()
-    for vmName in vmList:
-        vm = conn.lookupByName(vmName)
-        result[vmName] = vm
     return result
 
 
