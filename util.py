@@ -19,7 +19,6 @@ def get_all_vms():
     return result
 
 
-
 def get_vms():
     """Returns a dict with active VMs in the machine, using
     the VM name as key.
@@ -42,7 +41,7 @@ def list_info(vm_dict):
 
 
 
-def network_stats(vm):
+def network_all_stats(vm):
     """ Returns the accumulated network usage for the domain
     as an array with the following fields:
     [rx_bytes,rx_packets,rx_errs,rx_drop,tx_bytes,tx_packets,tx_errs,tx_drop]
@@ -54,6 +53,11 @@ def network_stats(vm):
 
     return stats
 
+
+def network_stats(vm):
+    """ Returns only [rx_bytes,tx_bytes] """
+    [rx_bytes,_,_,_,tx_bytes,_,_,_] = network_all_stats(vm)
+    return [rx_bytes,tx_bytes]
 
 
 def get_network_devices(dom):
@@ -76,7 +80,6 @@ def get_network_devices(dom):
     return devices
 
 
-# TODO Essa funcao retorna um valor de CPU diferente do vm.info().
 def cpu_stats(vm):
     """ Returns the accumulated CPU time used in nanoseconds."""
     info_cpus = vm.vcpus()[0]
@@ -89,10 +92,9 @@ def cpu_stats(vm):
     return time
 
 
-# TODO nao funciona
+# TODO is RSS ok?
 def memory_stats(vm):
-    return vm.memoryStats()
-
+    return vm.memoryStats()['rss']
 
 
 def main():
