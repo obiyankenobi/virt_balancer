@@ -28,10 +28,13 @@ class Packet:
          unpacker.feed(buf)
          dbuf = unpacker.unpack()
          if header.packetType == Packet.INFO:
+             return
              # unpack info
          elif header.packetType == Packet.VM_INFO:
+             return
              # unpack vm_info
          elif header.packetType == Packet.MIGRATE:
+             return
              # unpack migrate
 
 
@@ -45,9 +48,28 @@ class PacketHeader:
         buf = msgpack.packb([self.packetType])
         return buf
 
-    @staticmethod
-    def deserialize(buf):
-        return PacketHeader(buf[0])
+    def toString(self):
+        return 'PacketType={0}'.format(typeName())
+
+    def typeName():
+        if self.packetType == Packet.INFO: return 'Info'
+        if self.packetType == Packet.VM_INFO: return 'VM_Info'
+        if self.packetType == Packet.MIGRATE: return 'Migrate'
+        return 'Unknown'
+
+
+class PacketInfo:
+    def __init__(self,cpu,mem,network):
+        self.cpu = cpu
+        self.mem = mem
+        self.network = network
+
+    def serialize(self):
+        buf = msgpack.packb([self.cpu,self.mem,self.network])
+        return buf
+
+    def toString(self):
+        return 'cpu={0},mem={1},network={2}'.format(self.cpu,self.mem,self.network)
 
 
 class Migrate:
@@ -56,10 +78,11 @@ class Migrate:
         self.destination = destination
 
     def serialize(self):
-        return Migrate(buf[0],buf[1])
+        buf = msgpack.packb([self.vmName,self.destination])
+        return buf
 
-
-
+    def toString(self):
+        return 'vmName={0},destination={1}'.format(self.vmName,self.destination)
 
 
 

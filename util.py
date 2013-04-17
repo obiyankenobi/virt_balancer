@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 import libvirt
 from xml.etree import ElementTree as ET
 
