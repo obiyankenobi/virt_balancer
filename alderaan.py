@@ -8,6 +8,8 @@ import threading
 import socket
 import time
 
+from packet import *
+
 # a MF esta sobrecarregada e deve mandar as informacoes das MVs
 # para o servidor central
 overloaded = False
@@ -30,21 +32,29 @@ def main():
 
     # iniciar thread para monitorar MVs
 
-    while 1:
-        if not spaceport.getStopUpdate():
-            # pegar percentuais atuais de CPU, memoria e rede
+    #while 1:
+    #    if not spaceport.getStopUpdate():
+    #        # pegar percentuais atuais de CPU, memoria e rede
 
-            # atualizar percentuais acumulados de uso da MF
+    #        # atualizar percentuais acumulados de uso da MF
 
-            # algum deles acima do limite?
-            # caso sim, habilitar envio das informacoes das MVs
-            overloaded = True
-            print "sending"
-            spaceport.send()
+    #        # algum deles acima do limite?
+    #        # caso sim, habilitar envio das informacoes das MVs
+    #        overloaded = True
+    #        print "sending"
+    #        spaceport.send()
 
 
+    hdr = PacketHeader(Packet.INFO)
+    data = PacketInfo(70,20,40)
+    pkt = Packet(hdr,data)
+    spaceport.send(pkt.serialize())
+    time.sleep(interval)
 
-        time.sleep(interval)
+    hdr = PacketHeader(Packet.MIGRATE)
+    data = PacketMigrate('ubuntuVM','172.16.16.111')
+    pkt = Packet(hdr,data)
+    spaceport.send(pkt.serialize())
 
 
 
@@ -65,13 +75,14 @@ class Spaceport(threading.Thread):
             # 32KB devem ser suficientes para os nossos dados
             data, addr = self.sock.recvfrom(32768)
 
-            print 'received message: ', data
+            print 'received message from ', addr
+            print Packet.deserialize(data).toString()
 
     def getStopUpdate(self):
         return self.stopUpdate
 
-    def send(self, Packet):
-        self.sock.sendto("teste", (SERVER_IP, 11998))
+    def send(self, packet):
+        self.sock.sendto(packet, (SERVER_IP, 11998))
 
 
 if __name__ == "__main__":

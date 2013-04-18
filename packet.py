@@ -3,45 +3,56 @@
 import msgpack
 
 class Packet:
-     INFO = 1
-     VM_INFO = 2
-     MIGRATE = 3
+    UNKNOWN = 0
+    INFO = 1
+    VM_INFO = 2
+    MIGRATE = 3
 
-     def __init__(self, header, data):
-         self.header = header
-         self.data = data
+    def __init__(self, header, data):
+        self.header = header
+        self.data = data
 
-     def getPacketType(self):
-         return self.header.packetType
+    def getPacketType(self):
+        return self.header.packetType
 
-     def serialize(self):
-         buf = self.header.serialize() + self.data.serialize()
-         return buf
+    def toString(self):
+        return self.header.toString() + ' ; ' + self.data.toString()
 
-     @staticmethod
-     def deserialize(buf):
-         unpacker = msgpack.Unpacker()
-         unpacker.feed(buf)
-         hbuf = unpacker.unpack()
-         header = PacketHeader()
-         header.packetType = hbuf[0]
-         unpacker.feed(buf)
-         dbuf = unpacker.unpack()
-         if header.packetType == Packet.INFO:
-             return
-             # unpack info
-         elif header.packetType == Packet.VM_INFO:
-             return
-             # unpack vm_info
-         elif header.packetType == Packet.MIGRATE:
-             return
-             # unpack migrate
+    def serialize(self):
+        buf = self.header.serialize() + self.data.serialize()
+        return buf
+
+    @staticmethod
+    def deserialize(buf):
+        unpacker = msgpack.Unpacker()
+        unpacker.feed(buf)
+        hbuf = unpacker.unpack()
+        header = PacketHeader()
+        header.packetType = hbuf[0]
+        unpacker.feed(buf)
+        dbuf = unpacker.unpack()
+        if header.packetType == Packet.INFO:
+            data = PacketInfo()
+            data.cpu = dbuf[0]
+            data.mem = dbuf[1]
+            data.network = dbuf[2]
+            packet = Packet(header,data)
+        elif header.packetType == Packet.VM_INFO:
+            packet = Packet(header,data)
+        elif header.packetType == Packet.MIGRATE:
+            data = PacketMigrate()
+            data.vmName = dbuf[0]
+            data.destination = dbuf[1]
+            packet = Packet(header,data)
+
+        return packet
+
 
 
 class PacketHeader:
     # por enquanto so tem uma informacao, mas podemos querer
     # adicionar outras no futuro
-    def __init__(self, packetType):
+    def __init__(self, packetType=Packet.UNKNOWN):
         self.packetType = packetType
 
     def serialize(self):
@@ -49,9 +60,9 @@ class PacketHeader:
         return buf
 
     def toString(self):
-        return 'PacketType={0}'.format(typeName())
+        return 'PacketType={0}'.format(self.typeName())
 
-    def typeName():
+    def typeName(self):
         if self.packetType == Packet.INFO: return 'Info'
         if self.packetType == Packet.VM_INFO: return 'VM_Info'
         if self.packetType == Packet.MIGRATE: return 'Migrate'
@@ -59,7 +70,7 @@ class PacketHeader:
 
 
 class PacketInfo:
-    def __init__(self,cpu,mem,network):
+    def __init__(self,cpu=0,mem=0,network=0):
         self.cpu = cpu
         self.mem = mem
         self.network = network
@@ -72,8 +83,8 @@ class PacketInfo:
         return 'cpu={0},mem={1},network={2}'.format(self.cpu,self.mem,self.network)
 
 
-class Migrate:
-    def __init__(self, vmName, destination):
+class PacketMigrate:
+    def __init__(self, vmName='', destination=''):
         self.vmName = vmName
         self.destination = destination
 
