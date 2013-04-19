@@ -38,6 +38,8 @@ class Packet:
             data.network = dbuf[2]
             packet = Packet(header,data)
         elif header.packetType == Packet.VM_INFO:
+            data = PacketVMInfo()
+            data.vmDict = dbuf[0]
             packet = Packet(header,data)
         elif header.packetType == Packet.MIGRATE:
             data = PacketMigrate()
@@ -63,6 +65,7 @@ class PacketHeader:
         return 'PacketType={0}'.format(self.typeName())
 
     def typeName(self):
+        if self.packetType == Packet.UNKNOWN: return 'Unknown'
         if self.packetType == Packet.INFO: return 'Info'
         if self.packetType == Packet.VM_INFO: return 'VM_Info'
         if self.packetType == Packet.MIGRATE: return 'Migrate'
@@ -81,6 +84,18 @@ class PacketInfo:
 
     def toString(self):
         return 'cpu={0},mem={1},network={2}'.format(self.cpu,self.mem,self.network)
+
+
+class PacketVMInfo:
+    def __init__(self,vmDict=None):
+        self.vmDict = vmDict
+
+    def serialize(self):
+        buf = msgpack.packb([self.vmDict])
+        return buf
+
+    def toString(self):
+        return str(self.vmDict)
 
 
 class PacketMigrate:

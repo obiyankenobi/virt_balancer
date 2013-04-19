@@ -18,7 +18,7 @@ UDP_PORT = 11998
 SERVER_IP = '127.0.1.1'
 
 # frequencia de captura das informacoes (em segundos)
-interval = 5
+interval = 2
 
 def main():
     global overloaded
@@ -50,6 +50,15 @@ def main():
     pkt = Packet(hdr,data)
     spaceport.send(pkt.serialize())
     time.sleep(interval)
+
+
+    hdr = PacketHeader(Packet.VM_INFO)
+    dct = {'yan': [32,435,432],'pedro':[89,43,65],'raquel':[98,67,789]}
+    data = PacketVMInfo(dct)
+    pkt = Packet(hdr,data)
+    spaceport.send(pkt.serialize())
+    time.sleep(interval)
+
 
     hdr = PacketHeader(Packet.MIGRATE)
     data = PacketMigrate('ubuntuVM','172.16.16.111')
