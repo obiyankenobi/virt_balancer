@@ -39,7 +39,10 @@ class Packet:
             packet = Packet(header,data)
         elif header.packetType == Packet.VM_INFO:
             data = PacketVMInfo()
-            data.vmDict = dbuf[0]
+            data.cpu = dbuf[0]
+            data.mem = dbuf[1]
+            data.network = dbuf[2]
+            data.vmDict = dbuf[3]
             packet = Packet(header,data)
         elif header.packetType == Packet.MIGRATE:
             data = PacketMigrate()
@@ -87,15 +90,18 @@ class PacketInfo:
 
 
 class PacketVMInfo:
-    def __init__(self,vmDict=None):
+    def __init__(self,vmDict=None,cpu=0,mem=0,network=0):
         self.vmDict = vmDict
+        self.cpu = cpu
+        self.mem = mem
+        self.network = network
 
     def serialize(self):
-        buf = msgpack.packb([self.vmDict])
+        buf = msgpack.packb([self.cpu,self.mem,self.network,self.vmDict])
         return buf
 
     def toString(self):
-        return str(self.vmDict)
+        return 'cpu={0},mem={1},network={2},vmDict={3}'.format(self.cpu,self.mem,self.network,str(self.vmDict))
 
 
 class PacketMigrate:

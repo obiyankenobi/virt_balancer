@@ -7,6 +7,7 @@ import sys
 import threading
 import socket
 import time
+import logging
 
 from packet import *
 
@@ -20,11 +21,18 @@ SERVER_IP = '127.0.1.1'
 # frequencia de captura das informacoes (em segundos)
 interval = 2
 
+# alfa (constante do algoritmo)
+alfa = 0.6
+
 def main():
     global overloaded
 
-    # alfa (constante do algoritmo)
-    alfa = 0.6
+    # log rotation - http://docs.python.org/2/howto/logging-cookbook.html#using-file-rotation
+    logging.basicConfig(filename='alderaan.log',
+            format='%(asctime)s - %(threadName)s - %(funcName)s - %(levelname)s: %(message)s',
+            level=logging.DEBUG)
+    logging.info('\n=========================== Alderaan started ===========================\n')
+
 
     # iniciar packetListener (recebe informacoes do servidor central)
     spaceport = Spaceport()
@@ -49,14 +57,16 @@ def main():
     data = PacketInfo(70,20,40)
     pkt = Packet(hdr,data)
     spaceport.send(pkt.serialize())
+    logging.info('Sent {0}'.format(pkt.toString()))
     time.sleep(interval)
 
 
     hdr = PacketHeader(Packet.VM_INFO)
     dct = {'yan': [32,435,432],'pedro':[89,43,65],'raquel':[98,67,789]}
-    data = PacketVMInfo(dct)
+    data = PacketVMInfo(dct,50,10,20)
     pkt = Packet(hdr,data)
     spaceport.send(pkt.serialize())
+    logging.info('Sent {0}'.format(pkt.toString()))
     time.sleep(interval)
 
 
@@ -64,6 +74,7 @@ def main():
     data = PacketMigrate('ubuntuVM','172.16.16.111')
     pkt = Packet(hdr,data)
     spaceport.send(pkt.serialize())
+    logging.info('Sent {0}'.format(pkt.toString()))
 
 
 
@@ -71,7 +82,7 @@ class Spaceport(threading.Thread):
     """ Responsavel pela comunicacao com o servidor central. """
 
     def __init__(self):
-        threading.Thread.__init__(self)
+        threading.Thread.__init__(self, name='Spaceport')
         # essa MF esta participando de uma migracao e deve parar de capturar
         # seu uso para nao "contaminar" devido a sobrecarga da migracao
         self.stopUpdate = False
@@ -84,8 +95,8 @@ class Spaceport(threading.Thread):
             # 32KB devem ser suficientes para os nossos dados
             data, addr = self.sock.recvfrom(32768)
 
-            print 'received message from ', addr
-            print Packet.deserialize(data).toString()
+            logging.info('received message from {0}'.format(addr))
+            logging.info(Packet.deserialize(data).toString())
 
     def getStopUpdate(self):
         return self.stopUpdate
