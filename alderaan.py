@@ -2,21 +2,24 @@
 
 # Alderaan -> http://en.wikipedia.org/wiki/Alderaan
 
-import util
-import sys
 import threading
 import socket
 import time
 import logging
+import logging.handlers
 
 from packet import *
 
-# a MF esta sobrecarregada e deve mandar as informacoes das MVs
-# para o servidor central
-overloaded = False
 
 UDP_PORT = 11998
 SERVER_IP = '127.0.1.1'
+
+# arquivo de log
+LOG_FILENAME = 'log/alderaan.log'
+
+# a MF esta sobrecarregada e deve mandar as informacoes das MVs
+# e da MF para o servidor central
+overloaded = False
 
 # frequencia de captura das informacoes (em segundos)
 interval = 2
@@ -24,14 +27,19 @@ interval = 2
 # alfa (constante do algoritmo)
 alfa = 0.6
 
+
 def main():
     global overloaded
 
-    # log rotation - http://docs.python.org/2/howto/logging-cookbook.html#using-file-rotation
-    logging.basicConfig(filename='alderaan.log',
-            format='%(asctime)s - %(threadName)s - %(funcName)s - %(levelname)s: %(message)s',
-            level=logging.DEBUG)
-    logging.info('\n=========================== Alderaan started ===========================\n')
+    # configuracao do log
+    hdlr = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=4*1024*1024, backupCount=5)
+    fmtr = logging.Formatter('%(asctime)s - %(threadName)s - %(funcName)s - %(levelname)s: %(message)s')
+    log = logging.getLogger()
+    log.setLevel(logging.DEBUG)
+    log.addHandler(hdlr)
+    log.info('\n================================ Alderaan started @ %s ================================\n',
+            time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+    hdlr.setFormatter(fmtr)
 
 
     # iniciar packetListener (recebe informacoes do servidor central)
@@ -57,7 +65,7 @@ def main():
     data = PacketInfo(70,20,40)
     pkt = Packet(hdr,data)
     spaceport.send(pkt.serialize())
-    logging.info('Sent {0}'.format(pkt.toString()))
+    log.info('Sent {0}'.format(pkt.toString()))
     time.sleep(interval)
 
 
@@ -66,7 +74,7 @@ def main():
     data = PacketVMInfo(dct,50,10,20)
     pkt = Packet(hdr,data)
     spaceport.send(pkt.serialize())
-    logging.info('Sent {0}'.format(pkt.toString()))
+    log.info('Sent {0}'.format(pkt.toString()))
     time.sleep(interval)
 
 
@@ -74,7 +82,7 @@ def main():
     data = PacketMigrate('ubuntuVM','172.16.16.111')
     pkt = Packet(hdr,data)
     spaceport.send(pkt.serialize())
-    logging.info('Sent {0}'.format(pkt.toString()))
+    log.info('Sent {0}'.format(pkt.toString()))
 
 
 
@@ -91,12 +99,13 @@ class Spaceport(threading.Thread):
         self.sock.bind(('', UDP_PORT))
 
     def run(self):
+        log = logging.getLogger()
         while True:
             # 32KB devem ser suficientes para os nossos dados
             data, addr = self.sock.recvfrom(32768)
 
-            logging.info('received message from {0}'.format(addr))
-            logging.info(Packet.deserialize(data).toString())
+            log.info('received message from %s', addr)
+            log.info(Packet.deserialize(data).toString())
 
     def getStopUpdate(self):
         return self.stopUpdate
