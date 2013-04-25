@@ -84,11 +84,11 @@ def main():
     spaceport.send(pkt.serialize())
     log.info('Sent {0}'.format(pkt.toString()))
 
+# como detectar na main um pacote MIGRATE recebido pela classe spaceport??
 
 
 class Spaceport(threading.Thread):
-    """ Responsavel pela comunicacao com o servidor central. """
-
+    """Responsavel pela comunicacao com o servidor central."""
     def __init__(self):
         threading.Thread.__init__(self, name='Spaceport')
         # essa MF esta participando de uma migracao e deve parar de capturar
@@ -112,6 +112,27 @@ class Spaceport(threading.Thread):
 
     def send(self, packet):
         self.sock.sendto(packet, (SERVER_IP, 11998))
+
+
+
+class VMspy(threading.Thread):
+    """Interface de comunicacao com as MVs."""
+    def __init__(self):
+        stopUpdate = False
+        self.vmDict = {}
+
+    def run(self):
+        log = logging.getLogger()
+        while True:
+            if not self.stopUpdate:
+                # atualizar valores
+
+    def getVMInfo(self):
+        return self.vmDict
+
+    def migrate(self, vmName, destination):
+        stopUpdate = True
+        # implementar logica de migracao
 
 
 if __name__ == "__main__":
