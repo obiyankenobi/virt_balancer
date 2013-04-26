@@ -46,8 +46,7 @@ class Packet:
             packet = Packet(header,data)
         elif header.packetType == Packet.MIGRATE:
             data = PacketMigrate()
-            data.vmName = dbuf[0]
-            data.destination = dbuf[1]
+            data.migrateDict = dbuf[0]
             packet = Packet(header,data)
 
         return packet
@@ -105,16 +104,16 @@ class PacketVMInfo:
 
 
 class PacketMigrate:
-    def __init__(self, vmName='', destination=''):
-        self.vmName = vmName
-        self.destination = destination
+    def __init__(self, migrateDict):
+        # dict com vmName:destination, podendo descrever mais de uma migracao
+        self.migrateDict = migrateDict
 
     def serialize(self):
-        buf = msgpack.packb([self.vmName,self.destination])
+        buf = msgpack.packb([self.migrateDict])
         return buf
 
     def toString(self):
-        return 'vmName={0},destination={1}'.format(self.vmName,self.destination)
+        return '{0}'.format(self.migrationDict)
 
 
 

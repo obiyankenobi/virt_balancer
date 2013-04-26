@@ -10,22 +10,23 @@ import logging.handlers
 
 from packet import *
 
+from random import randint
+
 
 UDP_PORT = 11998
 SERVER_IP = '127.0.1.1'
 
+# define quando uma MF esta sobrecarregada
+LIMIT = 90
+
 # arquivo de log
 LOG_FILENAME = 'log/alderaan.log'
 
-# a MF esta sobrecarregada e deve mandar as informacoes das MVs
-# e da MF para o servidor central
-overloaded = False
-
 # frequencia de captura das informacoes (em segundos)
-interval = 2
+INTERVAL = 5
 
 # alfa (constante do algoritmo)
-alfa = 0.6
+ALFA = 0.6
 
 
 def main():
@@ -42,96 +43,90 @@ def main():
     hdlr.setFormatter(fmtr)
 
 
-    # iniciar packetListener (recebe informacoes do servidor central)
-    spaceport = Spaceport()
-    spaceport.start()
+    sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+    sock.bind(('', UDP_PORT))
 
-    # iniciar thread para monitorar MVs
-
-    #while 1:
-    #    if not spaceport.getStopUpdate():
-    #        # pegar percentuais atuais de CPU, memoria e rede
-
-    #        # atualizar percentuais acumulados de uso da MF
-
-    #        # algum deles acima do limite?
-    #        # caso sim, habilitar envio das informacoes das MVs
-    #        overloaded = True
-    #        print "sending"
-    #        spaceport.send()
+    vmSpy = VMspy()
+    vmSpy.start()
+    parasite = Parasite(sock, vmSpy)
+    parasite.start()
 
 
-    hdr = PacketHeader(Packet.INFO)
-    data = PacketInfo(70,20,40)
-    pkt = Packet(hdr,data)
-    spaceport.send(pkt.serialize())
-    log.info('Sent {0}'.format(pkt.toString()))
-    time.sleep(interval)
+    while True:
+        # 32KB devem ser suficientes para os nossos dados
+        data, addr = sock.recvfrom(32768)
+
+        log.info('received message from %s', addr)
+        log.info(Packet.deserialize(data).toString())
 
 
-    hdr = PacketHeader(Packet.VM_INFO)
-    dct = {'yan': [32,435,432],'pedro':[89,43,65],'raquel':[98,67,789]}
-    data = PacketVMInfo(dct,50,10,20)
-    pkt = Packet(hdr,data)
-    spaceport.send(pkt.serialize())
-    log.info('Sent {0}'.format(pkt.toString()))
-    time.sleep(interval)
 
-
-    hdr = PacketHeader(Packet.MIGRATE)
-    data = PacketMigrate('ubuntuVM','172.16.16.111')
-    pkt = Packet(hdr,data)
-    spaceport.send(pkt.serialize())
-    log.info('Sent {0}'.format(pkt.toString()))
-
-# como detectar na main um pacote MIGRATE recebido pela classe spaceport??
-
-
-class Spaceport(threading.Thread):
-    """Responsavel pela comunicacao com o servidor central."""
-    def __init__(self):
-        threading.Thread.__init__(self, name='Spaceport')
-        # essa MF esta participando de uma migracao e deve parar de capturar
-        # seu uso para nao "contaminar" devido a sobrecarga da migracao
+class Parasite(threading.Thread):
+    """Monitora os recursos da maquina fisica."""
+    def __init__(self, socket, vmSpy):
+        threading.Thread.__init__(self, name='Parasite')
         self.stopUpdate = False
+        self.socket = socket
+        self.vmSpy = vmSpy
+        self.cpu = 0
+        self.mem = 0
+        self.network = 0
 
-        self.sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-        self.sock.bind(('', UDP_PORT))
+    def setStopUpdate(value):
+        self.stopUpdate = value
 
     def run(self):
         log = logging.getLogger()
+
         while True:
-            # 32KB devem ser suficientes para os nossos dados
-            data, addr = self.sock.recvfrom(32768)
+            if not self.stopUpdate:
+                # atualizar valores de uso
+                cpu = randint(50,100)
+                mem = randint(50,100)
+                network = randint(50,100)
 
-            log.info('received message from %s', addr)
-            log.info(Packet.deserialize(data).toString())
+                # algum acima do limite?
+                if (cpu > LIMIT or mem > LIMIT or network > LIMIT):
+                    pktHeader = PacketHeader(Packet.VM_INFO)
+                    pktData = PacketVMInfo(self.vmSpy.getVMInfo(),cpu,mem,network)
+                else:
+                    pktHeader = PacketHeader(Packet.INFO)
+                    pktData = PacketInfo(cpu,mem,network)
 
-    def getStopUpdate(self):
-        return self.stopUpdate
+                pkt = Packet(pktHeader,pktData)
+                self.socket.sendto(pkt.serialize(), (SERVER_IP, UDP_PORT))
 
-    def send(self, packet):
-        self.sock.sendto(packet, (SERVER_IP, 11998))
+                log.info('Sent {0}'.format(pkt.toString()))
 
+            time.sleep(INTERVAL)
 
 
 class VMspy(threading.Thread):
     """Interface de comunicacao com as MVs."""
     def __init__(self):
-        stopUpdate = False
-        self.vmDict = {}
+        threading.Thread.__init__(self, name='VMspy')
+        self.stopUpdate = False
+        #self.vmDict = {}
+        self.vmDict = {'yan': [32,435,432],'pedro':[89,43,65],'raquel':[98,67,789]}
+        self.libvirtConn = None
 
     def run(self):
         log = logging.getLogger()
         while True:
             if not self.stopUpdate:
                 # atualizar valores
+                valor = 1
+
+            time.sleep(INTERVAL)
+
+    def setStopUpdate(value):
+        self.stopUpdate = value
 
     def getVMInfo(self):
         return self.vmDict
 
     def migrate(self, vmName, destination):
-        stopUpdate = True
+        self.stopUpdate = True
         # implementar logica de migracao
 
 
