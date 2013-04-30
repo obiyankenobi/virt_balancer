@@ -3,7 +3,12 @@
 import libvirt
 from xml.etree import ElementTree as ET
 
+<<<<<<< HEAD
 def get_all_vms():
+=======
+
+def get_vms():
+>>>>>>> e329a6a109911116c2e248bb957fc34ebcc0c03e
     """Returns a dict with all VMs in the machine, using
     the VM name as key.
     """
@@ -42,8 +47,12 @@ def list_info(vm_dict):
         print "{0}: state:{1} \t maxMemory:{2} \t memory:{3} \t virCPU:{4} \t cpuTime:{5}ns ".format(vm.name(), info[0], info[1]/1024, info[2]/1024, info[3], info[4])
 
 
+<<<<<<< HEAD
 
 def network_all_stats(vm):
+=======
+def network_stats(vm):
+>>>>>>> e329a6a109911116c2e248bb957fc34ebcc0c03e
     """ Returns the accumulated network usage for the domain
     as an array with the following fields:
     [rx_bytes,rx_packets,rx_errs,rx_drop,tx_bytes,tx_packets,tx_errs,tx_drop]
@@ -56,12 +65,15 @@ def network_all_stats(vm):
     return stats
 
 
+<<<<<<< HEAD
 def network_stats(vm):
     """ Returns only [rx_bytes,tx_bytes] """
     [rx_bytes,_,_,_,tx_bytes,_,_,_] = network_all_stats(vm)
     return [rx_bytes,tx_bytes]
 
 
+=======
+>>>>>>> e329a6a109911116c2e248bb957fc34ebcc0c03e
 def get_network_devices(dom):
     """Returns a list of network devices used by a VM."""
     #Create a XML tree from the domain XML description.
@@ -98,16 +110,18 @@ def cpu_stats(vm):
 def memory_stats(vm):
     return vm.memoryStats()['rss']
 
+def get_mem_sts(vm):
+    print "MEM STS: {0}".format(vm.memoryStats())
+
 
 def main():
     """Main for testing purposes"""
+    machine_name = 'ubuntu1'
     vm_dict = get_vms()
     list_info(vm_dict)
-
-    print network_stats(vm_dict['ubuntu2'])
-    print cpu_stats(vm_dict['ubuntu2'])
-    print memory_stats(vm_dict['ubuntu2'])
-
+    print network_stats(vm_dict[machine_name])
+    print cpu_stats(vm_dict[machine_name])
+    get_mem_sts(vm_dict[machine_name])
 
 if __name__ == "__main__":
     main()
