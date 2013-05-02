@@ -9,8 +9,7 @@ import logging
 import logging.handlers
 
 from packet import *
-
-from random import randint
+import util
 
 
 UDP_PORT = 11998
@@ -54,14 +53,15 @@ def main():
 
     while True:
         # 32KB devem ser suficientes para os nossos dados
-        data, addr = sock.recvfrom(32768)
+        data, (addr,port) = sock.recvfrom(32768)
 
         pkt = Packet.deserialize(data)
         log.info('received %s from %s', pkt.toString(), addr)
 
-        if pkt.getPacketType == Packet.SEND_INFO:
+        if pkt.getPacketType() == Packet.SEND_INFO:
             pktHeader = PacketHeader(Packet.INFO)
-            pktData = PacketInfo(parasite.getInfo())
+            cpu, mem, network = parasite.getInfo()
+            pktData = PacketInfo(cpu,mem,network)
             pkt = Packet(pktHeader,pktData)
             sock.sendto(pkt.serialize(), (addr, UDP_PORT))
             log.info('Sent {0}'.format(pkt.toString()))
@@ -107,8 +107,8 @@ class Parasite(threading.Thread):
                 self.mem = MI*mem + (1-MI)*self.mem
                 self.network = MI*network + (1-MI)*self.network
 
-                log.info('Acumulado - CPU={0},Mem={1},Network={2}; Instantaneo - CPU={0},Mem={1},Network={2}'
-                        .format(self.cpu,self.mem,self.network,cpu,mem,network))
+                log.info('Acumulado - CPU=%.2f,Mem=%.2f,Network=%.2f; Instantaneo - CPU=%.2f,Mem=%.2f,Network=%.2f',
+                        self.cpu,self.mem,self.network,cpu,mem,network)
 
                 # algum acima do limite?
                 if (self.cpu > LIMIT or self.mem > LIMIT or self.network > LIMIT):
@@ -120,7 +120,7 @@ class Parasite(threading.Thread):
 
             time.sleep(INTERVAL)
 
-    def getInfo():
+    def getInfo(self):
         return self.cpu, self.mem, self.network
 
 
