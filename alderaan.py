@@ -25,8 +25,8 @@ LOG_FILENAME = 'log/alderaan.log'
 # frequencia de captura das informacoes (em segundos)
 INTERVAL = 5
 
-# alfa (constante do algoritmo)
-ALFA = 0.6
+# mi (constante do algoritmo)
+MI = 0.6
 
 
 def main():
@@ -56,8 +56,16 @@ def main():
         # 32KB devem ser suficientes para os nossos dados
         data, addr = sock.recvfrom(32768)
 
-        log.info('received message from %s', addr)
-        log.info(Packet.deserialize(data).toString())
+        pkt = Packet.deserialize(data)
+        log.info('received %s from %s', pkt.toString(), addr)
+
+        if pkt.getPacketType == Packet.SEND_INFO:
+            pktHeader = PacketHeader(Packet.INFO)
+            pktData = PacketInfo(parasite.getInfo())
+            pkt = Packet(pktHeader,pktData)
+            sock.sendto(pkt.serialize(), (addr, UDP_PORT))
+            log.info('Sent {0}'.format(pkt.toString()))
+
 
 
 
@@ -70,7 +78,6 @@ class Parasite(threading.Thread):
         self.vmSpy = vmSpy
         self.cpu = 0
         self.mem = 0
-        self.network = 0
 
     def setStopUpdate(value):
         self.stopUpdate = value
@@ -78,27 +85,43 @@ class Parasite(threading.Thread):
     def run(self):
         log = logging.getLogger()
 
+        # Inicializacao das variaveis, para que a media nao seja feita
+        # com os valores iniciais zerados, o que causaria uma distorcao
+        # TODO solucao mais 'elegante'
+        _, network_last = util.getNetworkPercentage(1, 0)
+        time.sleep(INTERVAL)
+        self.cpu = util.getCpuPercentage()
+        self.mem = util.getMemoryPercentage()
+        self.network, network_last = util.getNetworkPercentage(INTERVAL, network_last)
+        time.sleep(INTERVAL)
+
         while True:
             if not self.stopUpdate:
-                # atualizar valores de uso
-                cpu = randint(50,100)
-                mem = randint(50,100)
-                network = randint(50,100)
+                # valores instantaneos
+                cpu = util.getCpuPercentage()
+                mem = util.getMemoryPercentage()
+                network, network_last = util.getNetworkPercentage(INTERVAL, network_last)
+
+                # valores acumulados
+                self.cpu = MI*cpu + (1-MI)*self.cpu
+                self.mem = MI*mem + (1-MI)*self.mem
+                self.network = MI*network + (1-MI)*self.network
+
+                log.info('Acumulado - CPU={0},Mem={1},Network={2}; Instantaneo - CPU={0},Mem={1},Network={2}'
+                        .format(self.cpu,self.mem,self.network,cpu,mem,network))
 
                 # algum acima do limite?
-                if (cpu > LIMIT or mem > LIMIT or network > LIMIT):
+                if (self.cpu > LIMIT or self.mem > LIMIT or self.network > LIMIT):
                     pktHeader = PacketHeader(Packet.VM_INFO)
                     pktData = PacketVMInfo(self.vmSpy.getVMInfo(),cpu,mem,network)
-                else:
-                    pktHeader = PacketHeader(Packet.INFO)
-                    pktData = PacketInfo(cpu,mem,network)
-
-                pkt = Packet(pktHeader,pktData)
-                self.socket.sendto(pkt.serialize(), (SERVER_IP, UDP_PORT))
-
-                log.info('Sent {0}'.format(pkt.toString()))
+                    pkt = Packet(pktHeader,pktData)
+                    self.socket.sendto(pkt.serialize(), (SERVER_IP, UDP_PORT))
+                    log.info('Sent {0}'.format(pkt.toString()))
 
             time.sleep(INTERVAL)
+
+    def getInfo():
+        return self.cpu, self.mem, self.network
 
 
 class VMspy(threading.Thread):
