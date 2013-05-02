@@ -18,54 +18,26 @@ def main():
     while True:
         data, addr = sock.recvfrom(32768)
         packet = Packet.deserialize(data)
-        if packet.header.packetType == Packet.INFO:
-            analyzer.updateInfo(addr, packet.toString())
-        elif packet.header.packetType == Packet.VM_INFO:
-            analyzer.VManalyze(addr, packet.toString())
+        if packet.header.packetType == Packet.VM_INFO:
+            migration = Migration(addr, packet.data.vmDict)
+            migration.analyzeMigration()
+            # TODO enviar pacote de request_info para todas as outras máquinas
+        elif packet.header.packetType == Packet.INFO:
+            # TODO receber o request_info
         else:
             raise ValueError(u'Nunca deveria entrar aqui. Erro! Header do tipo {0} na máquina central'.format(packet.header.packetType))
 
 
-class Analyzer(threading.Thread):
-    # XXX Implemetar como um singleton???
-    """ Just analyze data arrived from physical machines that are being used
-    """
-
-    def __init__(self):
-        self.pmInfo = {}
-
-
-    def updateInfo(self, addr, data):
-        if self.pmInfo.has_key(addr):
-            if self.pmInfo[addr][update]:
-                self.updateDict(addr, data['cpu'], data['mem'], data['net'], True)
-        else:
-            self.updateDict(addr, data['cpu'], data['mem'], data['net'], True)
-
-
-    def VManalyze(self, addr, data): 
-        self.updateDict(addr, data['cpu'], data['mem'], data['net'], False)
-        migration = Migration(addr, data['vmDict'])
-        migration.migrate()
-
-
-    def updateDict(self, addr, cpu, mem, net, update):
-        self.pmInfo[addr] = {'cpu': cpu, 'mem': mem, 'net': net, 'update': update}
-
-
-class Migration(threading.Thread):
-    # TODO Caso Analyzer seja um singleton não precisa mudar nada aqui,
-    # caso contrário tem que dar um jeito de pegar o analyzer global no init
+class Migration():
     """ Analyze a physical machine that needs migration
     """
 
     def __init__(self, addr, vmInfo):
-        pmAnalyzer = Analyzer()
         address = addr
         vmInfo = vmInfo
 
 
-    def migrate(self):
+    def analyzeMigration(self):
     # TODO Definir quem migrar e pra onde migrar
 
 if __name__ == "main":
