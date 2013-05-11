@@ -12,6 +12,10 @@ addresses = []
 addresses_set = set(addresses)
 pmInfo = {}
 
+# Quando temos mais de uma mv para migrar, vamos considerar que escolhida a MF destino da primeira MV, a segunda não pode escolher a mesma MF?
+# Essa dict garante essa condição
+receive_migration = {}
+
 MEM_TOT = 4096
 
 # Fórmula do custo de VM (Cobb-Douglas)
@@ -21,6 +25,9 @@ beta = 0.6
 
 
 def main():
+
+    for a in addresses:
+        receive_migration[a] = True
     
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(('', UDP_PORT))
@@ -71,10 +78,14 @@ class Migration(threading.Thread):
 
         costDict = OrderedDict(sorted(costDict.items(), key=lambda x: x[1]))
         for k, v in costDict.items():
-            if self.aliviaMF(vmInfo[k]['cpu'], vmInfo[k]['mem'], vmInfo[k]['network']):
+            if self.aliviaMF(vmInfo[k]['cpu'], vmInfo[k]['mem'], vmInfo[k]['network'], self.address):
                 dest = findDestination(vmInfo[k]['cpu'], vmInfo[k]['mem'], vmInfo[k]['network'])
-                self.migrate([(dest, k)])
-                migrated = True
+                if dest:
+                    self.migrate([(dest, k)])
+                    migrated = True
+                    break
+                else:
+                    raise Exception(u'Não temos nenhuma máquina física que suporta essa MV. O que fazer? Escolher outra?')
         if not migrated:
             # Buscar duas a duas, depois tres a tres, até encontrar uma situação que resolva
             raise Exception(u'Ainda não foi implementado o que fazer quando não houver uma VM que alivia a máquina sobrecarregada ou uma outra máquina física para suportar essa VM. Em breve o método migrate vai suportar migrar mais de uma VM e isso será resolvido.')
@@ -88,18 +99,21 @@ class Migration(threading.Thread):
         return (self.volumeVM(cpu, mem, network)**alfa)*(img**beta)
 
 
-    def aliviaMF(self, cpu, mem, network):
-        if pmInfo[self.address]['cpu'] + cpu < 85 and pmInfo[self.address]['mem'] + mem < 85 and pmInfo[self.address]['network'] + network < 85:
+    def aliviaMF(self, cpu, mem, network, address):
+        if pmInfo[address]['cpu'] + cpu < 85 and pmInfo[address]['mem'] + mem < 85 and pmInfo[address]['network'] + network < 85:
             return True
         return False
 
 
     def findDestination(self, cpu, mem, network):
-        # Tá errado, tem que buscar a menor possivel que possua uma margem
+        # Chosen defines the physical machine that will receive the virtual machine migration
+        chosen = {'addr': None, 'usage': 0}
         for k, v in pmInfo.items():
-            if v['cpu'] + cpu < 85 and v['mem'] + mem < 85 and v['network'] + network < 85:
-                return k
-        return None
+            if self.aliviaMF(cpu, mem, network, k) and receive_migration[k]:
+                usage = v['cpu'] + v['mem'] + v['network'] + cpu + mem + network
+                if usage > chosen['usage']:
+                    chosen = {'addr': k, 'usage': usage}
+        return chosen['addr']
 
 
     def migrate(self, data_migration):
