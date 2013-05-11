@@ -2,6 +2,7 @@
 
 import socket
 import threading
+import itertools
 
 from packet import *
 from collections import OrderedDict
@@ -9,12 +10,12 @@ from collections import OrderedDict
 UDP_PORT = 11998
 addresses = []
 # Usado no run da thread de migração para comparar se já chegaram todos os pacotes
-addresses_set = set(addresses)
+addressesSet = set(addresses)
 pmInfo = {}
 
 # Quando temos mais de uma mv para migrar, vamos considerar que escolhida a MF destino da primeira MV, a segunda não pode escolher a mesma MF?
 # Essa dict garante essa condição
-receive_migration = {}
+receiveMigration = {}
 
 MEM_TOT = 4096
 
@@ -27,7 +28,7 @@ beta = 0.6
 def main():
 
     for a in addresses:
-        receive_migration[a] = True
+        receiveMigration[a] = True
     
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(('', UDP_PORT))
@@ -50,7 +51,7 @@ class Migration(threading.Thread):
         vmInfo = vmInfo
         migrated = False
         costDict = {}
-        addr_received = set()
+        addrReceived = set()
 
 
     def run(self):
@@ -60,11 +61,11 @@ class Migration(threading.Thread):
         for a in addresses:
             sock.sendto(pkt.serialize(), (a, UDP_PORT))
         # Receive information packets and check if have already received all
-        while addr_received != addresses_set:
+        while addrReceived != addressesSet:
             data, (addr, port) = sock.recvfrom(32768)
             packet = Packet.deserialize(data)
             if packet.header.packetType == Packet.INFO:
-                addr_received.add(addr)
+                addrReceived.add(addr)
                 pmInfo[addr] = {}
                 pmInfo[addr]['cpu'] = packet.data.cpu
                 pmInfo[addr]['mem'] = packet.data.mem
@@ -74,21 +75,31 @@ class Migration(threading.Thread):
 
     def analyzeMigration(self):
         for k, v in vmInfo.items():
-            costDict[k] = costVM(v['cpu'], v['mem'], v['network'], v['img'])
+            self.costDict[k] = costVM(v['cpu'], v['mem'], v['network'], v['img'])
 
-        costDict = OrderedDict(sorted(costDict.items(), key=lambda x: x[1]))
-        for k, v in costDict.items():
-            if self.aliviaMF(vmInfo[k]['cpu'], vmInfo[k]['mem'], vmInfo[k]['network'], self.address):
+        arrayMV = []
+        self.costDict = OrderedDict(sorted(self.costDict.items(), key=lambda x: x[1]))
+        for k, v in self.costDict.items():
+            arrayMV.append(k)
+            if self.relievePM([(vmInfo[k]['cpu'], vmInfo[k]['mem'], vmInfo[k]['network'])], self.address):
                 dest = findDestination(vmInfo[k]['cpu'], vmInfo[k]['mem'], vmInfo[k]['network'])
                 if dest:
+                    # Essa função é sincrona ou assincrona? Posso fazer com que o destino participe de uma outra migração logo em seguida?
                     self.migrate([(dest, k)])
                     migrated = True
+                    # Se migrate for assincrona essa linha de baixo pode causar problemas, pois a MF vai ser liberada para migração antes de acabar a sua
+                    receiveMigration[k] = True
                     break
-                else:
-                    raise Exception(u'Não temos nenhuma máquina física que suporta essa MV. O que fazer? Escolher outra?')
         if not migrated:
-            # Buscar duas a duas, depois tres a tres, até encontrar uma situação que resolva
-            raise Exception(u'Ainda não foi implementado o que fazer quando não houver uma VM que alivia a máquina sobrecarregada ou uma outra máquina física para suportar essa VM. Em breve o método migrate vai suportar migrar mais de uma VM e isso será resolvido.')
+            dataMigration, canMigrate = self.getMoreThanOneVM(arrayMV)
+            if canMigrate:
+                migrate(dataMigration)
+                migrated = True
+                # Se migrate for assincrona essa linha de baixo pode causar problemas, pois a MF vai ser liberada para migração antes de acabar a sua
+                for d in dataMigration:
+                    receiveMigration[d[0]] = True
+            else:
+                raise Exception(u'Doesn`t exist a combination of virtual machines that can be migrated so that the physical machine will be relieved.')
 
 
     def volumeVM(self, cpu, mem, network):
@@ -99,8 +110,18 @@ class Migration(threading.Thread):
         return (self.volumeVM(cpu, mem, network)**alfa)*(img**beta)
 
 
-    def aliviaMF(self, cpu, mem, network, address):
-        if pmInfo[address]['cpu'] + cpu < 85 and pmInfo[address]['mem'] + mem < 85 and pmInfo[address]['network'] + network < 85:
+    def relievePM(self, resource, address):
+        # Resource is an array of tuples, used when the algorithm have to migrate more than one VM,
+        # so we must check if the migration of all VM's will relieve the PM
+        cpuTot = 0
+        memTot = 0
+        networkTot = 0
+        for r in resource:
+            cpuTot += r[0]
+            memTot += r[1]
+            networkTot += r[2]
+
+        if pmInfo[address]['cpu'] + cpuTot < 85 and pmInfo[address]['mem'] + memTot < 85 and pmInfo[address]['network'] + networkTot < 85:
             return True
         return False
 
@@ -109,23 +130,53 @@ class Migration(threading.Thread):
         # Chosen defines the physical machine that will receive the virtual machine migration
         chosen = {'addr': None, 'usage': 0}
         for k, v in pmInfo.items():
-            if self.aliviaMF(cpu, mem, network, k) and receive_migration[k]:
+            if self.relievePM([(cpu, mem, network)], k) and receiveMigration[k]:
                 usage = v['cpu'] + v['mem'] + v['network'] + cpu + mem + network
                 if usage > chosen['usage']:
                     chosen = {'addr': k, 'usage': usage}
         return chosen['addr']
 
 
-    def migrate(self, data_migration):
+    def migrate(self, dataMigration):
         # data_migration is an array of tuples like (addrDest, vmName)
         pktHeader = PacketHeader(Packet.MIGRATE)
-        for d in data_migration:
+        for d in dataMigration:
             migrateDict = {
                 d[0]: d[1],
             }
             pktData = PacketMigrate(migrateDict)
             packet = Packet(pktHeader, pktData)
             sock.sendto(packet.serialize(), (self.addr, UDP_PORT))
+
+
+    def getMoreThanOneVM(self, arrayMV):
+        # Usar itertools com a dict diretamente é um problema, pois não fica ordenado corretamente, por isso criei um array de MV's e itero em cima dele
+        for n in range(1, len(arrayMV)+1):
+            combinations = list(itertools.combinations(array, n))
+            for c in combinations:
+                # Check if this combination relieves the physical machine, if True find destination for them
+                cost = []
+                for vm in c:
+                    cost.append((self.costDict[vm]['cpu'], self.costDict[vm]['mem'], self.costDict[vm]['network']))
+                if self.relievePM(cost, self.address):
+                    addrDest = []
+                    willMigrate = True
+                    for vm in c:
+                        addr = self.findDestination(self.costDict[vm]['cpu'], self.costDict[vm]['mem'], self.costDict[vm]['network'])
+                        if addr:
+                            addrDest.append(addr)
+                            receiveMigration[addr] = False
+                        else:
+                            willMigrate = False
+                            for pm in addrDest:
+                                receiveMigration[pm] = True
+                            break
+                    if willMigrate:
+                        dataMigration = []
+                        for x in range(0, len(c)):
+                            dataMigration.append((addrDest[x], c[x]))
+                        return dataMigration, True
+        return [], False
 
 
 if __name__ == "main":
