@@ -70,12 +70,10 @@ class Migration(threading.Thread):
             costDict[k] = costVM(v['cpu'], v['mem'], v['network'], v['img'])
 
         costDict = OrderedDict(sorted(costDict.items(), key=lambda x: x[1]))
-        while not ready:
-            continue
         for k, v in costDict.items():
             if self.aliviaMF(vmInfo[k]['cpu'], vmInfo[k]['mem'], vmInfo[k]['network']):
                 dest = findDestination(vmInfo[k]['cpu'], vmInfo[k]['mem'], vmInfo[k]['network'])
-                self.migrate(dest, k)
+                self.migrate([(dest, k)])
                 migrated = True
         if not migrated:
             # Buscar duas a duas, depois tres a tres, até encontrar uma situação que resolva
@@ -104,16 +102,16 @@ class Migration(threading.Thread):
         return None
 
 
-    def migrate(self, addrDest, vmName):
-    # TODO Expandir método para poder realizar mais de uma migração
-    # Receber um array de tuplas e enviar os pacotes
+    def migrate(self, data_migration):
+        # data_migration is an array of tuples like (addrDest, vmName)
         pktHeader = PacketHeader(Packet.MIGRATE)
-        migrateDict = {
-            vmName: addrDest,
-        }
-        pktData = PacketMigrate(migrateDict)
-        packet = Packet(pktHeader, pktData)
-        sock.sendto(packet.serialize(), (self.addr, UDP_PORT))
+        for d in data_migration:
+            migrateDict = {
+                d[0]: d[1],
+            }
+            pktData = PacketMigrate(migrateDict)
+            packet = Packet(pktHeader, pktData)
+            sock.sendto(packet.serialize(), (self.addr, UDP_PORT))
 
 
 if __name__ == "main":
