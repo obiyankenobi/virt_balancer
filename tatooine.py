@@ -9,18 +9,20 @@ from collections import OrderedDict
 
 UDP_PORT = 11998
 addresses = []
-# Usado no run da thread de migração para comparar se já chegaram todos os pacotes
+# Used at run method of migration thread to compare if all INFO packet have already arrived
 addressesSet = set(addresses)
+
 pmInfo = {}
 
 # Quando temos mais de uma mv para migrar, vamos considerar que escolhida a MF destino da primeira MV, a segunda não pode escolher a mesma MF?
 # Essa dict garante essa condição
 receiveMigration = {}
 
+# Used to calculate VM image (MEM_TOT*mem/100.0)
 MEM_TOT = 4096
 
-# Fórmula do custo de VM (Cobb-Douglas)
-# Constantes
+# VM cost formula (Cobb-Douglas)
+# Constants
 alfa = 0.4
 beta = 0.6
 
@@ -75,31 +77,20 @@ class Migration(threading.Thread):
 
     def analyzeMigration(self):
         for k, v in vmInfo.items():
-            self.costDict[k] = costVM(v['cpu'], v['mem'], v['network'], v['img'])
+            self.costDict[k] = costVM(v['cpu'], v['mem'], v['network'], MEM_TOT*v['mem']/100.0)
 
         arrayMV = []
         self.costDict = OrderedDict(sorted(self.costDict.items(), key=lambda x: x[1]))
         for k, v in self.costDict.items():
             arrayMV.append(k)
-            if self.relievePM([(vmInfo[k]['cpu'], vmInfo[k]['mem'], vmInfo[k]['network'])], self.address):
-                dest = findDestination(vmInfo[k]['cpu'], vmInfo[k]['mem'], vmInfo[k]['network'])
-                if dest:
-                    # Essa função é sincrona ou assincrona? Posso fazer com que o destino participe de uma outra migração logo em seguida?
-                    self.migrate([(dest, k)])
-                    migrated = True
-                    # Se migrate for assincrona essa linha de baixo pode causar problemas, pois a MF vai ser liberada para migração antes de acabar a sua
-                    receiveMigration[k] = True
-                    break
-        if not migrated:
-            dataMigration, canMigrate = self.getMoreThanOneVM(arrayMV)
-            if canMigrate:
-                migrate(dataMigration)
-                migrated = True
-                # Se migrate for assincrona essa linha de baixo pode causar problemas, pois a MF vai ser liberada para migração antes de acabar a sua
-                for d in dataMigration:
-                    receiveMigration[d[0]] = True
-            else:
-                raise Exception(u'Doesn`t exist a combination of virtual machines that can be migrated so that the physical machine will be relieved.')
+        dataMigration = self.getDataMigration(arrayMV)
+        if dataMigration:
+            self.migrate(dataMigration)
+            # Se migrate for assincrona essa linha de baixo pode causar problemas, pois a MF vai ser liberada para migração antes de acabar a sua
+            for d in dataMigration:
+                receiveMigration[d[0]] = True
+        else:
+            raise Exception(u'Doesn`t exist a combination of virtual machines that can be migrated so that the physical machine will be relieved.')
 
 
     def volumeVM(self, cpu, mem, network):
@@ -149,10 +140,10 @@ class Migration(threading.Thread):
             sock.sendto(packet.serialize(), (self.addr, UDP_PORT))
 
 
-    def getMoreThanOneVM(self, arrayMV):
+    def getDataMigration(self, arrayMV):
         # Usar itertools com a dict diretamente é um problema, pois não fica ordenado corretamente, por isso criei um array de MV's e itero em cima dele
         for n in range(1, len(arrayMV)+1):
-            combinations = list(itertools.combinations(array, n))
+            combinations = list(itertools.combinations(arrayMV, n))
             for c in combinations:
                 # Check if this combination relieves the physical machine, if True find destination for them
                 cost = []
@@ -175,8 +166,8 @@ class Migration(threading.Thread):
                         dataMigration = []
                         for x in range(0, len(c)):
                             dataMigration.append((addrDest[x], c[x]))
-                        return dataMigration, True
-        return [], False
+                        return dataMigration
+        return []
 
 
 if __name__ == "main":
