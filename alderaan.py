@@ -10,13 +10,14 @@ import logging.handlers
 
 from packet import *
 import util
+import vmUtil
 
 
 UDP_PORT = 11998
 SERVER_IP = '127.0.1.1'
 
 # define quando uma MF esta sobrecarregada
-LIMIT = 90
+LIMIT = 20
 
 # arquivo de log
 LOG_FILENAME = 'log/alderaan.log'
@@ -129,24 +130,36 @@ class VMspy(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self, name='VMspy')
         self.stopUpdate = False
-        #self.vmDict = {}
-        self.vmDict = {'yan': [32,435,432],'pedro':[89,43,65],'raquel':[98,67,789]}
-        self.libvirtConn = None
+        self.vmDict = {}
+        #self.vmDict = {'yan': [32,435,432],'pedro':[89,43,65],'raquel':[98,67,789]}
 
     def run(self):
         log = logging.getLogger()
+
+        # guarda os valores instantaneos capturados
+        newDict = {}
+
+        # valores passados
+        oldDict = {}
+
         while True:
             if not self.stopUpdate:
-                # atualizar valores
-                valor = 1
-
+                newDict = vmUtil.getInfoAll(vmUtil.getVMs())
+                # cpu e rede sao cumulativos
+                intervalDict = vmUtil.intervalDiff(newDict,oldDict)
+                # guardar para a proxima iteracao
+                oldDict = newDict
+                # combinar os dois dicts, usando a formula do algoritmo
+                self.vmDict = vmUtil.mergeDicts(intervalDict,self.vmDict,MI)
             time.sleep(INTERVAL)
 
     def setStopUpdate(value):
         self.stopUpdate = value
 
     def getVMInfo(self):
-        return self.vmDict
+        # vmDict esta em valores absolutos
+        percentDict = vmUtil.getPercents(self.vmDict,INTERVAL)
+        return percentDict
 
     def migrate(self, vmName, destination):
         self.stopUpdate = True
