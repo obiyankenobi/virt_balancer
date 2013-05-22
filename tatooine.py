@@ -71,6 +71,7 @@ class Migration(threading.Thread):
     def __init__(self, addr, vmInfo, socket):
         threading.Thread.__init__(self, name='Migration')
         self.address = addr
+        # vmInfo is a dict like {'vm1': [cpu1, mem1, network1], 'vm2': [cpu2, mem2, network2]}
         self.vmInfo = vmInfo
         self.migrated = False
         self.costDict = {}
@@ -101,7 +102,7 @@ class Migration(threading.Thread):
 
     def analyzeMigration(self):
         for k, v in self.vmInfo.items():
-            self.costDict[k] = self.costVM(v['cpu'], v['mem'], v['network'], MEM_TOT*v['mem']/100.0)
+            self.costDict[k] = self.costVM(v[0], v[1], v[2], MEM_TOT*v[1]/100.0)
 
         arrayMV = []
         self.costDict = OrderedDict(sorted(self.costDict.items(), key=lambda x: x[1]))
@@ -179,12 +180,12 @@ class Migration(threading.Thread):
                 # Check if this combination relieves the physical machine, if True find destination for them
                 cost = []
                 for vm in c:
-                    cost.append((self.vmInfo[vm]['cpu'], self.vmInfo[vm]['mem'], self.vmInfo[vm]['network']))
+                    cost.append((self.vmInfo[vm][0], self.vmInfo[vm][1], self.vmInfo[vm][2]))
                 if self.relievePM(cost):
                     addrDest = []
                     willMigrate = True
                     for vm in c:
-                        addr = self.findDestination(self.vmInfo[vm]['cpu'], self.vmInfo[vm]['mem'], self.vmInfo[vm]['network'])
+                        addr = self.findDestination(self.vmInfo[vm][0], self.vmInfo[vm][1], self.vmInfo[vm][2])
                         if addr:
                             addrDest.append(addr)
                             receiveMigration[addr] = False
