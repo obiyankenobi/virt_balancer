@@ -87,12 +87,12 @@ class Migration(threading.Thread):
         for a in addresses:
             self.sock.sendto(pkt.serialize(), (a, UDP_PORT))
         # Receive information packets and check if have already received all
-        while addrReceived != addressesSet:
+        while self.addrReceived != addressesSet:
             data, (addr, port) = self.sock.recvfrom(32768)
             packet = Packet.deserialize(data)
             if packet.header.packetType == Packet.INFO:
                 log.info(u'Received INFO packet from {0}.'.format(addr))
-                addrReceived.add(addr)
+                self.addrReceived.add(addr)
                 pmInfo[addr] = {}
                 pmInfo[addr]['cpu'] = packet.data.cpu
                 pmInfo[addr]['mem'] = packet.data.mem
