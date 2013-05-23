@@ -59,7 +59,7 @@ def main():
         data, (addr, port) = sock.recvfrom(32768)
         packet = Packet.deserialize(data)
         if packet.header.packetType == Packet.VM_INFO:
-            log.info(u'Received VM_INFO packet from {0}.'.format(addr))
+            log.info(u'Received VM_INFO packet from {0}. vmDict = {1}'.format(addr, packet.data.vmDict))
             migration = Migration(addr, packet.data.vmDict, sock)
             migration.start()
 
@@ -91,7 +91,7 @@ class Migration(threading.Thread):
             data, (addr, port) = self.sock.recvfrom(32768)
             packet = Packet.deserialize(data)
             if packet.header.packetType == Packet.INFO:
-                log.info(u'Received INFO packet from {0}.'.format(addr))
+                log.info(u'Received INFO packet from {0}. pmInfo = {1}'.format(addr, pmInfo))
                 self.addrReceived.add(addr)
                 pmInfo[addr] = {}
                 pmInfo[addr]['cpu'] = packet.data.cpu
