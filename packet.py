@@ -117,7 +117,7 @@ class PacketVMInfo:
 
 
 class PacketMigrate:
-    def __init__(self, migrateDict):
+    def __init__(self, migrateDict=None):
         # dict com vmName:destination, podendo descrever mais de uma migracao
         self.migrateDict = migrateDict
 
