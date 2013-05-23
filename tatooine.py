@@ -161,6 +161,7 @@ class Migration(threading.Thread):
 
 
     def migrate(self, dataMigration):
+        log = logging.getLogger()
         # data_migration is an array of tuples like (addrDest, vmName)
         pktHeader = PacketHeader(Packet.MIGRATE)
         for d in dataMigration:
