@@ -79,6 +79,7 @@ class Parasite(threading.Thread):
         self.vmSpy = vmSpy
         self.cpu = 0
         self.mem = 0
+        self.network = 0
 
     def setStopUpdate(value):
         self.stopUpdate = value
