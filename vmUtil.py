@@ -8,7 +8,7 @@ def getAllVMs():
     """ Returns a dict with all VMs in the machine, using
     the VM name as key.
     """
-    conn = libvirt.open(None)
+    conn = libvirt.open("qemu:///system")
     result = {}
     vmList = conn.listDomainsID()
     for id in vmList:
@@ -26,7 +26,7 @@ def getVMs():
     """ Returns a dict with active VMs in the machine, using
     the VM name as key.
     """
-    conn = libvirt.open(None)
+    conn = libvirt.open("qemu:///system")
     result = {}
     vmList = conn.listDomainsID()
     for id in vmList:
