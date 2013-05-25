@@ -7,8 +7,9 @@ class Packet:
     INFO = 1
     VM_INFO = 2
     MIGRATE = 3
+    SEND_INFO = 4
 
-    def __init__(self, header, data):
+    def __init__(self, header, data=None):
         self.header = header
         self.data = data
 
@@ -16,10 +17,19 @@ class Packet:
         return self.header.packetType
 
     def toString(self):
-        return self.header.toString() + ' ; ' + self.data.toString()
+        try:
+            string = self.header.toString() + ' ; ' + self.data.toString()
+        except Exception:
+            # caso Packet.SEND_INFO
+            string = self.header.toString()
+        return string
 
     def serialize(self):
-        buf = self.header.serialize() + self.data.serialize()
+        try:
+            buf = self.header.serialize() + self.data.serialize()
+        except Exception:
+            # caso Packet.SEND_INFO
+            buf = self.header.serialize()
         return buf
 
     @staticmethod
@@ -48,6 +58,8 @@ class Packet:
             data = PacketMigrate()
             data.migrateDict = dbuf[0]
             packet = Packet(header,data)
+        elif header.packetType == Packet.SEND_INFO:
+            packet = Packet(header,None)
 
         return packet
 
@@ -71,6 +83,7 @@ class PacketHeader:
         if self.packetType == Packet.INFO: return 'Info'
         if self.packetType == Packet.VM_INFO: return 'VM_Info'
         if self.packetType == Packet.MIGRATE: return 'Migrate'
+        if self.packetType == Packet.SEND_INFO: return 'Send_info'
         return 'Unknown'
 
 
@@ -104,7 +117,7 @@ class PacketVMInfo:
 
 
 class PacketMigrate:
-    def __init__(self, migrateDict):
+    def __init__(self, migrateDict=None):
         # dict com vmName:destination, podendo descrever mais de uma migracao
         self.migrateDict = migrateDict
 

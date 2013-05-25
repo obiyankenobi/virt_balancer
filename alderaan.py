@@ -9,15 +9,15 @@ import logging
 import logging.handlers
 
 from packet import *
-
-from random import randint
+import util
+import vmUtil
 
 
 UDP_PORT = 11998
 SERVER_IP = '127.0.1.1'
 
 # define quando uma MF esta sobrecarregada
-LIMIT = 90
+LIMIT = 20
 
 # arquivo de log
 LOG_FILENAME = '/home/pedro/alderaan.log'
@@ -25,8 +25,8 @@ LOG_FILENAME = '/home/pedro/alderaan.log'
 # frequencia de captura das informacoes (em segundos)
 INTERVAL = 5
 
-# alfa (constante do algoritmo)
-ALFA = 0.6
+# mi (constante do algoritmo)
+MI = 0.6
 
 
 def main():
@@ -54,10 +54,19 @@ def main():
 
     while True:
         # 32KB devem ser suficientes para os nossos dados
-        data, addr = sock.recvfrom(32768)
+        data, (addr,port) = sock.recvfrom(32768)
 
-        log.info('received message from %s', addr)
-        log.info(Packet.deserialize(data).toString())
+        pkt = Packet.deserialize(data)
+        log.info('received %s from %s', pkt.toString(), addr)
+
+        if pkt.getPacketType() == Packet.SEND_INFO:
+            pktHeader = PacketHeader(Packet.INFO)
+            cpu, mem, network = parasite.getInfo()
+            pktData = PacketInfo(cpu,mem,network)
+            pkt = Packet(pktHeader,pktData)
+            sock.sendto(pkt.serialize(), (addr, UDP_PORT))
+            log.info('Sent {0}'.format(pkt.toString()))
+
 
 
 
@@ -78,27 +87,43 @@ class Parasite(threading.Thread):
     def run(self):
         log = logging.getLogger()
 
+        # Inicializacao das variaveis, para que a media nao seja feita
+        # com os valores iniciais zerados, o que causaria uma distorcao
+        # TODO solucao mais 'elegante'
+        _, network_last = util.getNetworkPercentage(1, 0)
+        time.sleep(INTERVAL)
+        self.cpu = util.getCpuPercentage()
+        self.mem = util.getMemoryPercentage()
+        self.network, network_last = util.getNetworkPercentage(INTERVAL, network_last)
+        time.sleep(INTERVAL)
+
         while True:
             if not self.stopUpdate:
-                # atualizar valores de uso
-                cpu = randint(50,100)
-                mem = randint(50,100)
-                network = randint(50,100)
+                # valores instantaneos
+                cpu = util.getCpuPercentage()
+                mem = util.getMemoryPercentage()
+                network, network_last = util.getNetworkPercentage(INTERVAL, network_last)
+
+                # valores acumulados
+                self.cpu = MI*cpu + (1-MI)*self.cpu
+                self.mem = MI*mem + (1-MI)*self.mem
+                self.network = MI*network + (1-MI)*self.network
+
+                log.info('Acumulado - CPU=%.2f,Mem=%.2f,Network=%.2f; Instantaneo - CPU=%.2f,Mem=%.2f,Network=%.2f',
+                        self.cpu,self.mem,self.network,cpu,mem,network)
 
                 # algum acima do limite?
-                if (cpu > LIMIT or mem > LIMIT or network > LIMIT):
+                if (self.cpu > LIMIT or self.mem > LIMIT or self.network > LIMIT):
                     pktHeader = PacketHeader(Packet.VM_INFO)
                     pktData = PacketVMInfo(self.vmSpy.getVMInfo(),cpu,mem,network)
-                else:
-                    pktHeader = PacketHeader(Packet.INFO)
-                    pktData = PacketInfo(cpu,mem,network)
-
-                pkt = Packet(pktHeader,pktData)
-                self.socket.sendto(pkt.serialize(), (SERVER_IP, UDP_PORT))
-
-                log.info('Sent {0}'.format(pkt.toString()))
+                    pkt = Packet(pktHeader,pktData)
+                    self.socket.sendto(pkt.serialize(), (SERVER_IP, UDP_PORT))
+                    log.info('Sent {0}'.format(pkt.toString()))
 
             time.sleep(INTERVAL)
+
+    def getInfo(self):
+        return self.cpu, self.mem, self.network
 
 
 class VMspy(threading.Thread):
@@ -106,24 +131,36 @@ class VMspy(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self, name='VMspy')
         self.stopUpdate = False
-        #self.vmDict = {}
-        self.vmDict = {'yan': [32,435,432],'pedro':[89,43,65],'raquel':[98,67,789]}
-        self.libvirtConn = None
+        self.vmDict = {}
+        #self.vmDict = {'yan': [32,435,432],'pedro':[89,43,65],'raquel':[98,67,789]}
 
     def run(self):
         log = logging.getLogger()
+
+        # guarda os valores instantaneos capturados
+        newDict = {}
+
+        # valores passados
+        oldDict = {}
+
         while True:
             if not self.stopUpdate:
-                # atualizar valores
-                valor = 1
-
+                newDict = vmUtil.getInfoAll(vmUtil.getVMs())
+                # cpu e rede sao cumulativos
+                intervalDict = vmUtil.intervalDiff(newDict,oldDict)
+                # guardar para a proxima iteracao
+                oldDict = newDict
+                # combinar os dois dicts, usando a formula do algoritmo
+                self.vmDict = vmUtil.mergeDicts(intervalDict,self.vmDict,MI)
             time.sleep(INTERVAL)
 
     def setStopUpdate(value):
         self.stopUpdate = value
 
     def getVMInfo(self):
-        return self.vmDict
+        # vmDict esta em valores absolutos
+        percentDict = vmUtil.getPercents(self.vmDict,INTERVAL)
+        return percentDict
 
     def migrate(self, vmName, destination):
         self.stopUpdate = True

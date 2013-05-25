@@ -1,0 +1,6 @@
+apt-get install python-libvirt qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils
+
+pip install psutil msgpack-python
+
+
+apt-get install ipython python-dev python-pip
