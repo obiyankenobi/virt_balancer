@@ -144,8 +144,9 @@ class Migration(threading.Thread):
 
     def canReceiveVM(self, cpu, mem, network, address):
         # We assume that one physical machine can receive only one migrated virtual machine
-        if pmInfo[address]['cpu'] + cpu < 85 and pmInfo[address]['mem'] + mem < 85 and pmInfo[address]['network'] + network < 85:
-            return True
+        if address != self.address:
+            if pmInfo[address]['cpu'] + cpu < 85 and pmInfo[address]['mem'] + mem < 85 and pmInfo[address]['network'] + network < 85:
+                return True
         return False
 
 
@@ -171,7 +172,7 @@ class Migration(threading.Thread):
             pktData = PacketMigrate(migrateDict)
             packet = Packet(pktHeader, pktData)
             self.sock.sendto(packet.serialize(), (self.address, UDP_PORT))
-        log.info(u'Migrate packet sent {0}'.format(dataMigration))
+        log.info(u'Migrate packet sent {0} to {1}'.format(dataMigration, self.address))
 
 
     def getDataMigration(self, arrayMV):
