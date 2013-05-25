@@ -20,7 +20,7 @@ SERVER_IP = '127.0.1.1'
 LIMIT = 20
 
 # arquivo de log
-LOG_FILENAME = 'log/alderaan.log'
+LOG_FILENAME = '/home/pedro/alderaan.log'
 
 # frequencia de captura das informacoes (em segundos)
 INTERVAL = 5
