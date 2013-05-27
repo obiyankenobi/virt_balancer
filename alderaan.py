@@ -31,8 +31,6 @@ MI = 0.6
 
 
 def main():
-    global overloaded
-
     # configuracao do log
     hdlr = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=4*1024*1024, backupCount=5)
     fmtr = logging.Formatter('%(asctime)s - %(threadName)s - %(funcName)s - %(levelname)s: %(message)s')
@@ -42,6 +40,11 @@ def main():
     log.info('\n================================ Alderaan started @ %s ================================\n',
             time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
     hdlr.setFormatter(fmtr)
+
+    log_excel = open(LOG_EXCEL,'a',1)
+    log_excel.write('\n================================ Alderaan started @ {0} ================================\n'.format(
+            time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
+    log_excel.write('time\t\tcpu_total\tmem_total\tnetwork_total\tcpu_inst\tmem_inst\tnetwork_inst\n')
 
 
     sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -61,6 +64,7 @@ def main():
         log.info('Received %s from %s', pkt.toString(), addr)
 
         if pkt.getPacketType() == Packet.SEND_INFO:
+            # manda as informacoes da maquina fisica
             pktHeader = PacketHeader(Packet.INFO)
             cpu, mem, network = parasite.getInfo()
             pktData = PacketInfo(cpu,mem,network)
@@ -68,14 +72,24 @@ def main():
             sock.sendto(pkt.serialize(), (addr, UDP_PORT))
             log.info('Sent {0}'.format(pkt.toString()))
         elif pkt.getPacketType() == Packet.MIGRATE:
-            parasite.setStopUpdate = True
-            vmSpy.setStopUpdate = True
+            # desabilita o monitoramento
+            parasite.setStopUpdate(True)
+            vmSpy.setStopUpdate(True)
+            # realiza a migracao
             migrateDict = pkt.data.migrateDict
             for addrDest in migrateDict.keys():
                 vmName = migrateDict[addrDest]
                 vmSpy.migrate(vmName,addrDest)
-            parasite.setStopUpdate = False
-            vmSpy.setStopUpdate = False
+            # envia pacote para o servidor avisando que a migracao terminou
+            pktHeader = PacketHeader(Packet.MIGRATION_FINISHED)
+            pktData = PacketMigrationFinished(migrateDict.keys())
+            pkt = Packet(pktHeader,pktData)
+            self.socket.sendto(pkt.serialize(), (SERVER_IP, UDP_PORT))
+            log.info('Sent {0}'.format(pkt.toString()))
+            # rehabilita o monitoramento
+            parasite = Parasite(sock, vmSpy)
+            parasite.start()
+            vmSpy.setStopUpdate(False)
 
 
 
@@ -89,15 +103,12 @@ class Parasite(threading.Thread):
         self.cpu = 0
         self.mem = 0
 
-    def setStopUpdate(value):
+    def setStopUpdate(self,value):
         self.stopUpdate = value
 
     def run(self):
         log = logging.getLogger()
         log_excel = open(LOG_EXCEL,'a',1)
-        log_excel.write('\n================================ Alderaan started @ {0} ================================\n'.format(
-                time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
-        log_excel.write('time\t\tcpu_total\tmem_total\tnetwork_total\tcpu_inst\tmem_inst\tnetwork_inst\n')
 
         # Inicializacao das variaveis, para que a media nao seja feita
         # com os valores iniciais zerados, o que causaria uma distorcao
@@ -109,30 +120,29 @@ class Parasite(threading.Thread):
         self.network, network_last = util.getNetworkPercentage(INTERVAL, network_last)
         time.sleep(INTERVAL)
 
-        while True:
-            if not self.stopUpdate:
-                # valores instantaneos
-                cpu = util.getCpuPercentage()
-                mem = util.getMemoryPercentage()
-                network, network_last = util.getNetworkPercentage(INTERVAL, network_last)
+        while not self.stopUpdate:
+            # valores instantaneos
+            cpu = util.getCpuPercentage()
+            mem = util.getMemoryPercentage()
+            network, network_last = util.getNetworkPercentage(INTERVAL, network_last)
 
-                # valores acumulados
-                self.cpu = MI*cpu + (1-MI)*self.cpu
-                self.mem = MI*mem + (1-MI)*self.mem
-                self.network = MI*network + (1-MI)*self.network
+            # valores acumulados
+            self.cpu = MI*cpu + (1-MI)*self.cpu
+            self.mem = MI*mem + (1-MI)*self.mem
+            self.network = MI*network + (1-MI)*self.network
 
-                log.info('Final - CPU=%.2f,Mem=%.2f,Network=%.2f; Instant - CPU=%.2f,Mem=%.2f,Network=%.2f',
-                        self.cpu,self.mem,self.network,cpu,mem,network)
-                log_excel.write('{0}\t{1:.2f}\t\t{2:.2f}\t\t{3:.2f}\t\t{4:.2f}\t\t{5:.2f}\t\t{6:.2f}\n'.format(
-                    time.strftime("%H:%M:%S", time.localtime()),self.cpu,self.mem,self.network,cpu,mem,network))
+            log.info('Final - CPU=%.2f,Mem=%.2f,Network=%.2f; Instant - CPU=%.2f,Mem=%.2f,Network=%.2f',
+                    self.cpu,self.mem,self.network,cpu,mem,network)
+            log_excel.write('{0}\t{1:.2f}\t\t{2:.2f}\t\t{3:.2f}\t\t{4:.2f}\t\t{5:.2f}\t\t{6:.2f}\n'.format(
+                time.strftime("%H:%M:%S", time.localtime()),self.cpu,self.mem,self.network,cpu,mem,network))
 
-                # algum acima do limite?
-                if (self.cpu > LIMIT or self.mem > LIMIT or self.network > LIMIT):
-                    pktHeader = PacketHeader(Packet.VM_INFO)
-                    pktData = PacketVMInfo(self.vmSpy.getVMInfo(),cpu,mem,network)
-                    pkt = Packet(pktHeader,pktData)
-                    self.socket.sendto(pkt.serialize(), (SERVER_IP, UDP_PORT))
-                    log.info('Sent {0}'.format(pkt.toString()))
+            # algum acima do limite?
+            if (self.cpu > LIMIT or self.mem > LIMIT or self.network > LIMIT):
+                pktHeader = PacketHeader(Packet.VM_INFO)
+                pktData = PacketVMInfo(self.vmSpy.getVMInfo(),cpu,mem,network)
+                pkt = Packet(pktHeader,pktData)
+                self.socket.sendto(pkt.serialize(), (SERVER_IP, UDP_PORT))
+                log.info('Sent {0}'.format(pkt.toString()))
 
             time.sleep(INTERVAL)
         log_excel.close()
@@ -147,7 +157,6 @@ class VMspy(threading.Thread):
         threading.Thread.__init__(self, name='VMspy')
         self.stopUpdate = False
         self.vmDict = {}
-        #self.vmDict = {'yan': [32,435,432],'pedro':[89,43,65],'raquel':[98,67,789]}
 
     def run(self):
         log = logging.getLogger()
@@ -169,7 +178,7 @@ class VMspy(threading.Thread):
                 self.vmDict = vmUtil.mergeDicts(intervalDict,self.vmDict,MI)
             time.sleep(INTERVAL)
 
-    def setStopUpdate(value):
+    def setStopUpdate(self,value):
         self.stopUpdate = value
 
     def getVMInfo(self):
@@ -195,6 +204,18 @@ class VMspy(threading.Thread):
             log_excel.write('{0}: {1} to {2} error\n'.format(time.strftime("%H:%M:%S", time.localtime()),vmName,destination))
         log_excel.close()
         return rc
+
+def main_test():
+    vmSpy = VMspy()
+    vmSpy.start()
+
+    while True:
+        parasite = Parasite(None, vmSpy)
+        parasite.start()
+        print 'parasite criada'
+        time.sleep(12)
+        parasite.setStopUpdate(True)
+        time.sleep(12)
 
 if __name__ == "__main__":
     main()
