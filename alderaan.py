@@ -19,8 +19,9 @@ SERVER_IP = '127.0.1.1'
 # define quando uma MF esta sobrecarregada
 LIMIT = 20
 
-# arquivo de log
+# arquivos de log
 LOG_FILENAME = 'log/alderaan.log'
+LOG_EXCEL = 'log/alderaan_excel.log'
 
 # frequencia de captura das informacoes (em segundos)
 INTERVAL = 5
@@ -57,7 +58,7 @@ def main():
         data, (addr,port) = sock.recvfrom(32768)
 
         pkt = Packet.deserialize(data)
-        log.info('received %s from %s', pkt.toString(), addr)
+        log.info('Received %s from %s', pkt.toString(), addr)
 
         if pkt.getPacketType() == Packet.SEND_INFO:
             pktHeader = PacketHeader(Packet.INFO)
@@ -66,7 +67,15 @@ def main():
             pkt = Packet(pktHeader,pktData)
             sock.sendto(pkt.serialize(), (addr, UDP_PORT))
             log.info('Sent {0}'.format(pkt.toString()))
-
+        elif pkt.getPacketType() == Packet.MIGRATE:
+            parasite.setStopUpdate = True
+            vmSpy.setStopUpdate = True
+            migrateDict = pkt.data.migrateDict
+            for addrDest in migrateDict.keys():
+                vmName = migrateDict[addrDest]
+                vmSpy.migrate(vmName,addrDest)
+            parasite.setStopUpdate = False
+            vmSpy.setStopUpdate = False
 
 
 
@@ -85,6 +94,10 @@ class Parasite(threading.Thread):
 
     def run(self):
         log = logging.getLogger()
+        log_excel = open(LOG_EXCEL,'a',1)
+        log_excel.write('\n================================ Alderaan started @ {0} ================================\n'.format(
+                time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())))
+        log_excel.write('time\t\tcpu_total\tmem_total\tnetwork_total\tcpu_inst\tmem_inst\tnetwork_inst\n')
 
         # Inicializacao das variaveis, para que a media nao seja feita
         # com os valores iniciais zerados, o que causaria uma distorcao
@@ -108,8 +121,10 @@ class Parasite(threading.Thread):
                 self.mem = MI*mem + (1-MI)*self.mem
                 self.network = MI*network + (1-MI)*self.network
 
-                log.info('Acumulado - CPU=%.2f,Mem=%.2f,Network=%.2f; Instantaneo - CPU=%.2f,Mem=%.2f,Network=%.2f',
+                log.info('Final - CPU=%.2f,Mem=%.2f,Network=%.2f; Instant - CPU=%.2f,Mem=%.2f,Network=%.2f',
                         self.cpu,self.mem,self.network,cpu,mem,network)
+                log_excel.write('{0}\t{1:.2f}\t\t{2:.2f}\t\t{3:.2f}\t\t{4:.2f}\t\t{5:.2f}\t\t{6:.2f}\n'.format(
+                    time.strftime("%H:%M:%S", time.localtime()),self.cpu,self.mem,self.network,cpu,mem,network))
 
                 # algum acima do limite?
                 if (self.cpu > LIMIT or self.mem > LIMIT or self.network > LIMIT):
@@ -120,6 +135,7 @@ class Parasite(threading.Thread):
                     log.info('Sent {0}'.format(pkt.toString()))
 
             time.sleep(INTERVAL)
+        log_excel.close()
 
     def getInfo(self):
         return self.cpu, self.mem, self.network
@@ -162,9 +178,23 @@ class VMspy(threading.Thread):
         return percentDict
 
     def migrate(self, vmName, destination):
-        self.stopUpdate = True
-        # implementar logica de migracao
+        log = logging.getLogger()
+        log_excel = open(LOG_EXCEL,'a',1)
 
+        # implementar logica de migracao
+        command_line =  "virsh migrate --live {0} qemu+ssh://{1}/system --persistent --undefinesource".format(vmName,destination)
+        args = shlex.split(command_line)
+        log.info("Starting migration with command: {0}".format(command_line))
+        log_excel.write('{0} to {1} starting\n'.format(vmName,destination))
+        rc = subprocess.call(args)
+        if rc is 0:
+            log.info("Migration successfully finished.")
+            log_excel.write('{0} to {1} finished\n'.format(vmName,destination))
+        else:
+            log.error("Error migrating virtual machine {0} to {1}.".format(vmName,destination))
+            log_excel.write('{0}: {1} to {2} error\n'.format(time.strftime("%H:%M:%S", time.localtime()),vmName,destination))
+        log_excel.close()
+        return rc
 
 if __name__ == "__main__":
     main()
