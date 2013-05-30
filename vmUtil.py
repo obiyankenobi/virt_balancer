@@ -140,14 +140,14 @@ def vmDiff(newValue, oldValue):
     # Does not need the difference for memory
     return [newValue[0]-oldValue[0], newValue[1], newValue[2]-oldValue[2]]
 
-def getPercents(vmDict, interval):
+def getPercents(vmDict, interval, num_cpus):
     """ Transform the dict to percentages """
     nano = 10**9 # e Gbps
     percentDict = {}
     memory = psutil.virtual_memory()[0]
     for vmName in vmDict:
         absoluteValues = vmDict[vmName]
-        percentDict[vmName] = [absoluteValues[0]*100/(nano*interval), absoluteValues[1]*100/memory, absoluteValues[2]*100/(nano*interval)]
+        percentDict[vmName] = [absoluteValues[0]*100/(num_cpus*nano*interval), absoluteValues[1]*100/memory, absoluteValues[2]*100/(nano*interval)]
     return percentDict
 
 

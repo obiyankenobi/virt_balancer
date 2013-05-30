@@ -15,6 +15,7 @@ import vmUtil
 
 UDP_PORT = 11998
 SERVER_IP = '127.0.1.1'
+NUM_CPUS = 2
 
 # define quando uma MF esta sobrecarregada
 LIMIT = 20
@@ -139,9 +140,11 @@ class Parasite(threading.Thread):
             # algum acima do limite?
             if (self.cpu > LIMIT or self.mem > LIMIT or self.network > LIMIT):
                 pktHeader = PacketHeader(Packet.VM_INFO)
-                pktData = PacketVMInfo(self.vmSpy.getVMInfo(),cpu,mem,network)
+                vmInfo = self.vmSpy.getVMInfo()
+                pktData = PacketVMInfo(vmInfo,cpu,mem,network)
                 pkt = Packet(pktHeader,pktData)
                 self.socket.sendto(pkt.serialize(), (SERVER_IP, UDP_PORT))
+                logVmInfo(vmInfo)
                 log.info('Sent {0}'.format(pkt.toString()))
 
             time.sleep(INTERVAL)
@@ -183,7 +186,7 @@ class VMspy(threading.Thread):
 
     def getVMInfo(self):
         # vmDict esta em valores absolutos
-        percentDict = vmUtil.getPercents(self.vmDict,INTERVAL)
+        percentDict = vmUtil.getPercents(self.vmDict,INTERVAL,NUM_CPUS)
         return percentDict
 
     def migrate(self, vmName, destination):
@@ -204,6 +207,14 @@ class VMspy(threading.Thread):
             log_excel.write('{0}: {1} to {2} error\n'.format(time.strftime("%H:%M:%S", time.localtime()),vmName,destination))
         log_excel.close()
         return rc
+
+
+def logVmInfo(vmDict):
+        log_excel = open(LOG_EXCEL,'a',1)
+        for vm in vmDict.keys():
+            log_excel.write('vm[{0}] \t {1} \t {2} \t {3} \n'.format(vm,vmDict[vm][0],vmDict[vm][1],vmDict[vm][2]))
+        log_excel.close()
+
 
 def main_test():
     vmSpy = VMspy()
