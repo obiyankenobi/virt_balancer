@@ -8,6 +8,7 @@ class Packet:
     VM_INFO = 2
     MIGRATE = 3
     SEND_INFO = 4
+    MIGRATION_FINISHED = 5
 
     def __init__(self, header, data=None):
         self.header = header
@@ -60,6 +61,10 @@ class Packet:
             packet = Packet(header,data)
         elif header.packetType == Packet.SEND_INFO:
             packet = Packet(header,None)
+        elif header.packetType == Packet.MIGRATION_FINISHED:
+            data = PacketMigrationFinished()
+            data.destList = dbuf[0]
+            packet = Packet(header,data)
 
         return packet
 
@@ -84,6 +89,7 @@ class PacketHeader:
         if self.packetType == Packet.VM_INFO: return 'VM_Info'
         if self.packetType == Packet.MIGRATE: return 'Migrate'
         if self.packetType == Packet.SEND_INFO: return 'Send_info'
+        if self.packetType == Packet.MIGRATION_FINISHED: return 'Migration_finished'
         return 'Unknown'
 
 
@@ -128,5 +134,17 @@ class PacketMigrate:
     def toString(self):
         return '{0}'.format(self.migrationDict)
 
+
+class PacketMigrationFinished:
+    def __init__(self, destList=None):
+        # dict com vmName:destination, podendo descrever mais de uma migracao
+        self.destList = destList
+
+    def serialize(self):
+        buf = msgpack.packb([self.destList])
+        return buf
+
+    def toString(self):
+        return '{0}'.format(self.destList)
 
 

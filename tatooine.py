@@ -62,6 +62,9 @@ def main():
             log.info(u'Received VM_INFO packet from {0}. vmDict = {1}'.format(addr, packet.data.vmDict))
             migration = Migration(addr, packet.data.vmDict, sock)
             migration.start()
+        elif packet.header.packetType == Packet.MIGRATION_FINISHED:
+            for machine in packet.data.destList:
+                receiveMigration[machine] = True
 
 
 class Migration(threading.Thread):
@@ -112,8 +115,6 @@ class Migration(threading.Thread):
         dataMigration = self.getDataMigration(arrayMV)
         if dataMigration:
             self.migrate(dataMigration)
-            for d in dataMigration:
-                receiveMigration[d[0]] = True
         else:
             raise Exception(u'Doesn`t exist a combination of virtual machines that can be migrated so that the physical machine will be relieved.')
 
@@ -164,15 +165,14 @@ class Migration(threading.Thread):
     def migrate(self, dataMigration):
         log = logging.getLogger()
         # data_migration is an array of tuples like (addrDest, vmName)
-        pktHeader = PacketHeader(Packet.MIGRATE)
+        migrateDict = {}
         for d in dataMigration:
-            migrateDict = {
-                d[0]: d[1],
-            }
-            pktData = PacketMigrate(migrateDict)
-            packet = Packet(pktHeader, pktData)
-            self.sock.sendto(packet.serialize(), (self.address, UDP_PORT))
-        log.info(u'Migrate packet sent {0} to {1}'.format(dataMigration, self.address))
+            migrateDict[d[0]] = d[1]
+        pktHeader = PacketHeader(Packet.MIGRATE)
+        pktData = PacketMigrate(migrateDict)
+        packet = Packet(pktHeader, pktData)
+        self.sock.sendto(packet.serialize(), (self.address, UDP_PORT))
+        log.info(u'Migrate packet sent {0}'.format(dataMigration))
 
 
     def getDataMigration(self, arrayMV):
