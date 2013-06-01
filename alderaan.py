@@ -7,6 +7,8 @@ import socket
 import time
 import logging
 import logging.handlers
+import shlex
+import subprocess
 
 from packet import *
 import util
@@ -14,7 +16,7 @@ import vmUtil
 
 
 UDP_PORT = 11998
-SERVER_IP = '127.0.1.1'
+SERVER_IP = '192.168.91.180'
 NUM_CPUS = 2
 
 # define quando uma MF esta sobrecarregada
@@ -22,7 +24,7 @@ LIMIT = 20
 
 # arquivo de log
 LOG_FILENAME = '/home/pedro/alderaan.log'
-LOG_EXCEL = 'home/pedro/alderaan_excel.log'
+LOG_EXCEL = '/home/pedro/alderaan_excel.log'
 
 # frequencia de captura das informacoes (em segundos)
 INTERVAL = 5
@@ -75,7 +77,6 @@ def main():
         elif pkt.getPacketType() == Packet.MIGRATE:
             # desabilita o monitoramento
             parasite.setStopUpdate(True)
-            vmSpy.setStopUpdate(True)
             # realiza a migracao
             migrateDict = pkt.data.migrateDict
             for addrDest in migrateDict.keys():
@@ -85,7 +86,7 @@ def main():
             pktHeader = PacketHeader(Packet.MIGRATION_FINISHED)
             pktData = PacketMigrationFinished(migrateDict.keys())
             pkt = Packet(pktHeader,pktData)
-            self.socket.sendto(pkt.serialize(), (SERVER_IP, UDP_PORT))
+            sock.sendto(pkt.serialize(), (SERVER_IP, UDP_PORT))
             log.info('Sent {0}'.format(pkt.toString()))
             # rehabilita o monitoramento
             parasite = Parasite(sock, vmSpy)
@@ -159,7 +160,6 @@ class VMspy(threading.Thread):
     """Interface de comunicacao com as MVs."""
     def __init__(self):
         threading.Thread.__init__(self, name='VMspy')
-        self.stopUpdate = False
         self.vmDict = {}
 
     def run(self):
@@ -172,18 +172,14 @@ class VMspy(threading.Thread):
         oldDict = {}
 
         while True:
-            if not self.stopUpdate:
-                newDict = vmUtil.getInfoAll(vmUtil.getVMs())
-                # cpu e rede sao cumulativos
-                intervalDict = vmUtil.intervalDiff(newDict,oldDict)
-                # guardar para a proxima iteracao
-                oldDict = newDict
-                # combinar os dois dicts, usando a formula do algoritmo
-                self.vmDict = vmUtil.mergeDicts(intervalDict,self.vmDict,MI)
+	    newDict = vmUtil.getInfoAll(vmUtil.getVMs())
+     	    # cpu e rede sao cumulativos
+	    intervalDict = vmUtil.intervalDiff(newDict,oldDict)
+	    # guardar para a proxima iteracao
+	    oldDict = newDict
+	    # combinar os dois dicts, usando a formula do algoritmo
+	    self.vmDict = vmUtil.mergeDicts(intervalDict,self.vmDict,MI)
             time.sleep(INTERVAL)
-
-    def setStopUpdate(self,value):
-        self.stopUpdate = value
 
     def getVMInfo(self):
         # vmDict esta em valores absolutos
@@ -195,7 +191,7 @@ class VMspy(threading.Thread):
         log_excel = open(LOG_EXCEL,'a',1)
 
         # implementar logica de migracao
-        command_line =  "virsh migrate --live {0} qemu+ssh://{1}/system --persistent --undefinesource".format(vmName,destination)
+        command_line =  "virsh --connect qemu:///system migrate --live {0} qemu+ssh://{1}/system --persistent --undefinesource".format(vmName,destination)
         args = shlex.split(command_line)
         log.info("Starting migration with command: {0}".format(command_line))
         log_excel.write('{0} to {1} starting\n'.format(vmName,destination))
