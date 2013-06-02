@@ -90,7 +90,6 @@ def main():
             # rehabilita o monitoramento
             parasite = Parasite(sock, vmSpy)
             parasite.start()
-            vmSpy.setStopUpdate(False)
 
 
 

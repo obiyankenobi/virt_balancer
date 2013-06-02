@@ -31,6 +31,8 @@ def getVMs():
     vmList = conn.listDomainsID()
     for id in vmList:
         vm = conn.lookupByID(id)
+        if vm.state(0)[0] != 1:
+            continue
         vmName = vm.name()
         result[vmName] = vm
     return result
