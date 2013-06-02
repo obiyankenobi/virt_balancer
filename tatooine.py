@@ -16,7 +16,7 @@ UDP_PORT = 11998
 
 # List of IP's of physical machines
 # We could get this list with other methods, but this is easier for tests
-addresses = []
+addresses = ['192.168.91.59', '192.168.91.61', '192.168.91.39']
 
 # Used at run method of migration thread to compare if all INFO packet have already arrived
 addressesSet = set(addresses)
@@ -27,7 +27,7 @@ pmInfo = {}
 receiveMigration = {}
 
 # Used to calculate VM image (MEM_TOT*mem/100.0)
-MEM_TOT = 4096
+MEM_TOT = 2048
 
 # VM cost formula (Cobb-Douglas)
 # Constants

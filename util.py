@@ -8,7 +8,7 @@ def getMemoryPercentage():
 
 
 def getCpuPercentage():
-    return psutil.cpu_percent()
+    return psutil.cpu_percent(None)
 
 
 def getNetworkPercentage(interval, last_used_net):
